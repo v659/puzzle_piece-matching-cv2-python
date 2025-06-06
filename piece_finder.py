@@ -2,15 +2,50 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from dataclasses import dataclass
 import constants
 
 
-def show_image(image, title='Image'):
-    if isinstance(image, list):
-        for i, img in enumerate(image):
-            cv2.imshow(f"{title} {i}", img)
+def show_image(images, title='Image'):
+    if not isinstance(images, list):
+        images = [images]
+
+    # Display all images in a grid using matplotlib
+    cols = 4
+    rows = (len(images) + cols - 1) // cols
+    plt.figure(figsize=(15, 3 * rows))
+    for i, img in enumerate(images):
+        plt.subplot(rows, cols, i + 1)
+        if len(img.shape) == 2:  # Grayscale
+            plt.imshow(img, cmap='gray')
+        else:
+            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.title(f"{title} {i}")
+        plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+
+
+def _display(image, title):
+    if os.environ.get("DISPLAY", "") == "":
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        plt.title(title)
+        plt.axis("off")
+        plt.show()
     else:
         cv2.imshow(title, image)
+
+
+@dataclass
+class PreprocessingResult:
+    cleaned: np.ndarray
+    original: np.ndarray
+    gray: np.ndarray
+    sharpened: np.ndarray
+    blurred: np.ndarray
+    binary: np.ndarray
+    opened: np.ndarray
 
 
 class ManipulateImage:
@@ -19,7 +54,8 @@ class ManipulateImage:
         if self.image is None:
             raise ValueError(f"Could not load image from path: {image_path}")
 
-    def threshold_image(self):
+    def preprocess_image(self) -> PreprocessingResult:
+        # Convert to grayscale
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
         # Sharpen
@@ -34,12 +70,20 @@ class ManipulateImage:
         # Threshold
         _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # Morphology
+        # Morphology to remove gridlines and noise
         morph_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel, iterations=2)
         cleaned = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, morph_kernel, iterations=1)
 
-        return cleaned, self.image, gray, sharpened, blurred, binary, opened
+        return PreprocessingResult(
+            cleaned=cleaned,
+            original=self.image,
+            gray=gray,
+            sharpened=sharpened,
+            blurred=blurred,
+            binary=binary,
+            opened=opened
+        )
 
 
 class PieceContourFinder:
@@ -52,15 +96,22 @@ class PieceContourFinder:
 
 def main():
     converter = ManipulateImage(constants.image)
-    cleaned, original, gray, sharpened, blurred, binary, opened = converter.threshold_image()
+    result = converter.preprocess_image()
 
     # Edge detection
-    contour_finder = PieceContourFinder(cleaned)
+    contour_finder = PieceContourFinder(result.binary)
     edges = contour_finder.find_edges()
 
-    # Display results
+    # Show all stages
     show_image([
-        original, gray, sharpened, blurred, binary, opened, cleaned, edges
+        result.original,
+        result.gray,
+        result.sharpened,
+        result.blurred,
+        result.binary,
+        result.opened,
+        result.cleaned,
+        edges
     ], title='Stage')
 
     cv2.waitKey(0)
