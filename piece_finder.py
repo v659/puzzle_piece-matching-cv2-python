@@ -5,17 +5,17 @@ from dataclasses import dataclass
 import constants
 from typing import List, Tuple
 
+
 def show_image(images, title='Image'):
     if not isinstance(images, list):
-        images = [images]
+        images = list[images]
 
-    # Display all images in a grid using matplotlib
     cols = 4
     rows = (len(images) + cols - 1) // cols
     plt.figure(figsize=(15, 3 * rows))
     for i, img in enumerate(images):
         plt.subplot(rows, cols, i + 1)
-        if len(img.shape) == 2:  # Grayscale
+        if len(img.shape) == 2:
             plt.imshow(img, cmap='gray')
         else:
             plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -23,10 +23,6 @@ def show_image(images, title='Image'):
         plt.axis('off')
     plt.tight_layout()
     plt.show()
-
-
-
-
 
 
 @dataclass
@@ -39,7 +35,6 @@ class PreprocessingResult:
     binary: np.ndarray
 
 
-
 class ManipulateImage:
     def __init__(self, image_path):
         self.image = cv2.imread(image_path)
@@ -47,21 +42,13 @@ class ManipulateImage:
             raise ValueError(f"Could not load image from path: {image_path}")
 
     def preprocess_image(self) -> PreprocessingResult:
-        # Convert to grayscale
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-
-        # Sharpen
         sharpen_kernel = np.array([[0, -1, 0],
                                    [-1, 5, -1],
                                    [0, -1, 0]])
         sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
-
-        # Blur
         blurred = cv2.GaussianBlur(sharpened, (7, 7), 0)
-
-        # Threshold
         _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
 
         return PreprocessingResult(
             original=self.image,
@@ -98,10 +85,7 @@ class PuzzlePieceDetector:
             piece_crop = self.original_image[y:y + h, x:x + w].copy()
             pieces.append(piece_crop)
             bounding_boxes.append((x, y, w, h))
-
-        # Create a copy to draw contours on
         contour_image = self.original_image.copy()
-        # Draw all contours in green with thickness 3
         cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 3)
 
         if self.debug:
@@ -110,22 +94,15 @@ class PuzzlePieceDetector:
         return pieces, bounding_boxes, contour_image
 
 
-
-
 def main():
-    # Step 1: Preprocess the image
     converter = ManipulateImage(constants.image)
     result = converter.preprocess_image()
 
-
-
-    # Step 3: Detect puzzle pieces
     piece_detector = PuzzlePieceDetector(result.binary, result.original)
-    pieces, boxes, contour_vis = piece_detector.find_pieces(min_area=500) # Lower threshold for safety
+    pieces, boxes, contour_vis = piece_detector.find_pieces(min_area=500)
 
     print(f"[INFO] Extracted {len(pieces)} puzzle piece(s)")
 
-    # Step 4: Show all intermediate processing steps
     show_image([
         result.original,
         result.gray,
@@ -135,17 +112,13 @@ def main():
 
     ], title='Stage')
 
-    # Step 5: Show the extracted puzzle piece(s)
     if pieces:
         show_image(contour_vis, title="Puzzle Piece(s)")
     else:
         print("[WARN] No pieces found.")
 
-    # Final: Wait and close
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-
 
 
 if __name__ == "__main__":
