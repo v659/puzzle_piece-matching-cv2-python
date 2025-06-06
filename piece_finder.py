@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 from dataclasses import dataclass
 import constants
-
+from typing import List, Tuple
 
 def show_image(images, title='Image'):
     if not isinstance(images, list):
@@ -27,25 +26,18 @@ def show_image(images, title='Image'):
 
 
 
-def _display(image, title):
-    if os.environ.get("DISPLAY", "") == "":
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        plt.title(title)
-        plt.axis("off")
-        plt.show()
-    else:
-        cv2.imshow(title, image)
+
 
 
 @dataclass
 class PreprocessingResult:
-    cleaned: np.ndarray
+
     original: np.ndarray
     gray: np.ndarray
     sharpened: np.ndarray
     blurred: np.ndarray
     binary: np.ndarray
-    opened: np.ndarray
+
 
 
 class ManipulateImage:
@@ -70,52 +62,90 @@ class ManipulateImage:
         # Threshold
         _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # Morphology to remove gridlines and noise
-        morph_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel, iterations=2)
-        cleaned = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, morph_kernel, iterations=1)
 
         return PreprocessingResult(
-            cleaned=cleaned,
             original=self.image,
             gray=gray,
             sharpened=sharpened,
             blurred=blurred,
             binary=binary,
-            opened=opened
+
         )
 
 
-class PieceContourFinder:
-    def __init__(self, image):
-        self.image = image
+class PuzzlePieceDetector:
+    def __init__(self, binary_image: np.ndarray, original_image: np.ndarray, debug: bool = False):
+        self.binary_image = binary_image
+        self.original_image = original_image
+        self.debug = debug
 
-    def find_edges(self):
-        return cv2.Canny(self.image, 30, 200)
+    def find_pieces(self, min_area: int = 500) -> Tuple[List[np.ndarray], List[Tuple[int, int, int, int]], np.ndarray]:
+        inverted = cv2.bitwise_not(self.binary_image)
+        contours, _ = cv2.findContours(
+            inverted, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if self.debug:
+            print(f"[INFO] Found {len(contours)} contours total.")
+
+        pieces = []
+        bounding_boxes = []
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < min_area:
+                continue
+            x, y, w, h = cv2.boundingRect(contour)
+            piece_crop = self.original_image[y:y + h, x:x + w].copy()
+            pieces.append(piece_crop)
+            bounding_boxes.append((x, y, w, h))
+
+        # Create a copy to draw contours on
+        contour_image = self.original_image.copy()
+        # Draw all contours in green with thickness 3
+        cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 3)
+
+        if self.debug:
+            print(f"[INFO] Extracted {len(pieces)} puzzle piece(s).")
+
+        return pieces, bounding_boxes, contour_image
+
+
 
 
 def main():
+    # Step 1: Preprocess the image
     converter = ManipulateImage(constants.image)
     result = converter.preprocess_image()
 
-    # Edge detection
-    contour_finder = PieceContourFinder(result.binary)
-    edges = contour_finder.find_edges()
 
-    # Show all stages
+
+    # Step 3: Detect puzzle pieces
+    piece_detector = PuzzlePieceDetector(result.binary, result.original)
+    pieces, boxes, contour_vis = piece_detector.find_pieces(min_area=500) # Lower threshold for safety
+
+    print(f"[INFO] Extracted {len(pieces)} puzzle piece(s)")
+
+    # Step 4: Show all intermediate processing steps
     show_image([
         result.original,
         result.gray,
         result.sharpened,
         result.blurred,
         result.binary,
-        result.opened,
-        result.cleaned,
-        edges
+
     ], title='Stage')
 
+    # Step 5: Show the extracted puzzle piece(s)
+    if pieces:
+        show_image(contour_vis, title="Puzzle Piece(s)")
+    else:
+        print("[WARN] No pieces found.")
+
+    # Final: Wait and close
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
 
 
 if __name__ == "__main__":
