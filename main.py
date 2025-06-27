@@ -240,16 +240,17 @@ def detect_corners(points, std_tol=0.25, length_bonus_weight=2.0, deviation_pena
         if score < best_score:
             best_score = score
             best_combo = combo
-
     return best_combo if best_combo is not None else []
 
 
 def extract_sides_from_corners(harris_points, corners):
+    print(corners)
     if len(corners) != 4:
         return []
-    print(corners)
+
     pts = np.array(harris_points)
     sides = []
+
     for i in range(4):
         c1 = np.array(corners[i])
         c2 = np.array(corners[(i+1) % 4])
@@ -261,12 +262,15 @@ def extract_sides_from_corners(harris_points, corners):
         for pt in pts:
             rel = pt - c1
             proj = np.dot(rel, direction)
+
+            # Check if point lies between the two corners (in projected direction)
             if 0 <= proj <= norm:
-                perp = rel - proj * direction
-                if np.linalg.norm(perp) < 10:
-                    side.append(tuple(pt))
+                side.append(tuple(pt))  # Keep all points in side span, including bulges
+
         sides.append(side)
+
     return sides
+
 
 
 def compare_sides_fuzzy(side1, side2):
