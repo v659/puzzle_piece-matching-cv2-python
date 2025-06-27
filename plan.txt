@@ -1,0 +1,101 @@
+CLASSES:
+
+Manipulate images:
+
+ - Load image
+ - Grayscale image
+ - Sharpen image with sharpen kernel of:
+        ([[0, -1, 0],
+        [-1, 5, -1],
+        [0, -1, 0]])
+ - Blur image with Gaussian Blur
+ - Binarize image with cv2.threshold
+ - Return result
+
+Detect piece and get harris corners:
+  Find pieces
+    - Invert binary image
+    - Find Contours
+    - Process contours
+    - Crop pieces
+    - Find harris corners
+    - Deduplicate points (DBSCAN)
+    - Return output
+
+FUNCTIONS:
+
+Detect Corners:
+    Iterates through all possibilities of corners and finds those which
+    are the furthest equal corners. The corners have to conform to
+    both.
+
+Extract Sides:
+    - Check that we have exactly 4 corners
+    - Convert Harris points to NumPy array
+    - Loop through each side of the piece
+    - Define the two corners of the current side
+    - Compute side direction as a unit vector
+    - Project the point onto the side direction
+    - Keep points that lie between the two corners
+    - Append to side list
+    - Return side points
+
+Classify side shape:
+    - Check if the side has enough points.
+    - Determine if the side is horizontal or vertical.
+    - Compute the mean of the side's base axis values.
+    - Find the point with the maximum deviation from the mean.
+    - Use the deviation's sign and side index to classify as 'inward' or 'outward'.
+    - Return the maximum of the two distances as the final score.
+    - Return the shape type.
+
+Compare sides function:
+    - Return infinity if either side is empty.
+    - Convert both sides to NumPy arrays.
+    - Reverse the second side (to simulate matching direction).
+    - Compute directed Hausdorff distance from side1 to side2.
+    - Compute directed Hausdorff distance from side2 to side1.
+
+Match Sides:
+    - Initialize an empty list to store matches.
+    - Loop over all unique pairs of pieces (i, j) without repetition.
+    - For each pair, loop through all sides of both pieces.
+    - Classify the shape of each side (inward or outward).
+    - If the sides are complementary (one inward, one outward):
+        - Compute the fuzzy match score (Hausdorff distance).
+        - Store the match as a tuple: (piece_a, side_a, piece_b, side_b, score).
+    - Sort all matches by score (lower is better).
+    - Return the sorted list of matches.
+
+Main:
+
+    The main function processes a puzzle image to detect and analyze individual pieces.
+    It loads and preprocesses the image, detects puzzle pieces and their Harris corners,
+    then identifies corners and extracts sides for each piece. Each side is classified
+    as inward or outward, and compatible sides between different pieces are matched using
+    a fuzzy comparison. The top matches are printed, and visualizations of each
+    step—original image, processed stages, corners, and sides—are displayed
+    to help inspect the results.
+
+    - Reconstruct puzzle:
+        The reconstruct_and_show_puzzle function
+        attempts to rebuild the full puzzle by placing pieces
+        on a canvas based on matched sides. It starts with an
+        initial piece, then iteratively rotates and positions
+        matching pieces by aligning their corresponding sides.
+        It calculates rotation angles and translation offsets
+        to ensure pieces fit together correctly, skipping poor
+        or redundant matches. Finally, it displays the
+        reconstructed puzzle layout in a window.
+
+
+REFERENCE CORNERS:
+
+[array([60,  2]), array([325,   5]), array([323, 296]), array([ 61, 298])]
+[DEBUG] Piece 0 → 4 corners, 4 sides.
+[array([69,  5]), array([325,   6]), array([324, 302]), array([ 65, 300])]
+[DEBUG] Piece 1 → 4 corners, 4 sides.
+[array([65,  1]), array([335,  15]), array([332, 294]), array([ 65, 295])]
+[DEBUG] Piece 2 → 4 corners, 4 sides.
+[array([65,  4]), array([321,   6]), array([317, 304]), array([ 65, 301])]
+[DEBUG] Piece 3 → 4 corners, 4 sides.
